@@ -274,6 +274,79 @@ class Resume_Analysis:
             "missing_skills" : missing_skills,
             "strength" : strengths,
             "improvement_areas" : improvement_areas
-
         }
+    #feature2: Chat with resume
+    def chat_with_resume(self,query):
+        try:
+            if not self.resume_text:
+                raise ValueError("there is no resume text.Upload your resume to chat with the resume.")
+            if not self.rag_vector_store:
+                raise ValueError("There is no any vectorstore created till now, upload pdf or txt to creat vectorstore.")
+            Model = ChatOllama(model="llama3.2:1b", temperature=0.7, verbose=True)
+            retriever = self.rag_vectorstore.as_retriever()
+            chain = RetrivalQA.from_chain_type(
+                llm=Model,
+                retriever=retriever,
+                chain_type="stuff",
+                return_source_documents=False
+            )
+            response=chain.invoke({"query":query})
+            return response["result"]
+        except Exception as e:
+            print(f"You have some error at {e}")
 
+    #Feature3: Interview preperation based on the resume model will genrate response based on level of difficulty.
+    def Genrate_question_answer(self,interview_type:str,difficulty:str,num_questions:int=15):
+        """interviw questions will be genrate based on resume context difficulty level and interview type.
+        it will help both for the developer and the interviewer.Help developer incase of gaving interview,
+        and interviewr for taking the interview """
+        try:
+            if not self.resume_text:
+                raise ValueError("No resume text is loaded!!!!!!!!")
+            
+            #sif resume text is not avialable it will creat the vectorstore
+            # Build RAG vector store if not already built
+            if not self.rag_vectorstore:
+                self.rag_vectorstore = self.rag_vector_store(self.resume_text)
+            
+            #load the Model
+            Model = ChatOllama(model="llama3.2:1b", temperature=0.7, verbose=True)
+            retriever =  self.rag_vectorstore.as_retriever()   #vectorstore is loaded
+            chain = RetrivalQA.from_chain_type(
+                llm=Model,
+                retriever=retriever,
+                chain_type="stuff",
+                return_source_documents=False
+            )
+            
+            prompt = f"""
+            You are an AI interview coach. Given the candidate's resume and interview type, generate {num_questions} interview questions.
+
+            Interview Type: {interview_type}
+            Difficulty Level: {difficulty}
+
+            The questions should be relevant to the interview type and aligned with the candidate's experience and skills in the resume.
+
+            Format your response as a JSON list of question-answer pairs like:
+            [
+                {{
+                    "question": "What is ...?",
+                    "answer": "The answer is ..."
+                }},
+                ...
+            ]
+            Resume:
+            {self.resume_text[:3000]}...
+            """
+            response = Model.invoke(prompt)
+            content = response.content.strip()
+
+            try:
+                qa_pairs = json.loads(content)
+                return qa_pairs
+            except json.JSONDecodeError:
+                print("Model response could not be parsed as JSON. Returning raw text.")
+                print("Raw content:\n", content[:800])
+                return content
+        except Exception as e:
+            print(f"you may have some erorr at: {e}")    
