@@ -9,6 +9,7 @@ from langchain.vectorstores import FAISS
 from langchain.chains import RetrivalQA
 from concurrent.futures import ThreadPoolExecutor
 import re
+import base64
 import json
 import warnings
 warnings.filterwarnings("ignore")
@@ -350,3 +351,43 @@ class Resume_Analysis:
                 return content
         except Exception as e:
             print(f"you may have some erorr at: {e}")    
+
+    #Feature4: Lets make the last function which will take role based on role it will tailored the resume of candidate
+    def generate_tailored_documents(self, role: str) -> Tuple[str, str]:
+        "based on based it will tailored the resume and cover letter for user."
+        try:
+            if not self.resume_text:
+                raise ValueError("There is no resume text loaded!!!!!!")
+            #load model
+            llm = ChatOllama(model="llama3:8b", temperature=0.6)
+            prompt = f"""
+            You are an AI resume and cover letter expert. Based on the candidate's resume and target role,
+            generate a tailored resume and cover letter.
+
+            Role: {role}
+
+            Resume:
+            {self.resume_text[:3000]}...
+
+            Format the response in this JSON format:
+            {{
+                "tailored_resume": "The tailored resume content here...",
+                "cover_letter": "The tailored cover letter content here..."
+            }}
+            """
+
+            response = llm.invoke(prompt)
+            content = response.content.strip()
+
+            try:
+                doc = json.loads(content)
+                tailored_resume = doc.get("tailored_resume", "")
+                cover_letter = doc.get("cover_letter", "")
+                return tailored_resume.strip(), cover_letter.strip()
+            
+            except json.JSONDecodeError:
+                print("⚠️ Failed to parse LLM response as JSON.")
+                return content, ""
+        except Exception as e:
+            print(f"Error in tailored document generation: {e}")
+            return "", ""   
