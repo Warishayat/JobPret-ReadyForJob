@@ -1,6 +1,16 @@
 langchain-community 
 langchain-groq      
 load-dotenv
-
+faiss-cpu            
+fpdf                  
+fpdf2                 
+langchain-community   
+langchain-groq        
+load-dotenv          
+matplotlib           
+pypdf                 
+PyPDF2                
+sentence-transformers 
+streamlit-chat        
 
 

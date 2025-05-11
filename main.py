@@ -1,5 +1,5 @@
 import streamlit as st
-from ResumeAnalysis import Resume_Analysis
+from Agent.ResumeAnalysis import Resume_Analysis
 import json
 import matplotlib.pyplot as plt
 from streamlit_chat import message as chat_message
@@ -184,14 +184,11 @@ def show_main_app():
         
         # Role-Skill Mapping
         tech_roles = {
-    # Data & AI Roles
     "Data Scientist": ["Python", "Pandas", "NumPy", "Scikit-learn", "TensorFlow", "SQL", "Data Visualization", "Statistics", "Machine Learning", "Data Wrangling"],
     "Machine Learning Engineer": ["Python", "TensorFlow", "PyTorch", "Scikit-learn", "MLOps", "Docker", "Kubernetes", "AWS/GCP", "CI/CD", "Model Deployment"],
     "Data Engineer": ["Python", "SQL", "ETL", "Apache Spark", "Hadoop", "Airflow", "Data Pipelines", "AWS/GCP/Azure", "Data Warehousing", "Database Design"],
     "Data Analyst": ["SQL", "Python", "Excel", "Tableau", "Power BI", "Data Visualization", "Statistics", "Pandas", "Data Cleaning", "Reporting"],
     "AI Research Scientist": ["Python", "TensorFlow", "PyTorch", "Research Methods", "Neural Networks", "NLP", "Computer Vision", "Mathematics", "Publications", "Algorithm Development"],
-    
-    # Software Development Roles
     "Frontend Developer": ["JavaScript", "React", "Angular", "Vue", "HTML5", "CSS3", "TypeScript", "Responsive Design", "Web Performance", "UI/UX Principles"],
     "Backend Developer": ["Python", "Java", "Node.js", "Django", "Flask", "Spring", "REST APIs", "Microservices", "Database Design", "Authentication"],
     "Full Stack Developer": ["JavaScript", "React", "Node.js", "Python", "SQL", "REST APIs", "HTML/CSS", "Git", "Docker", "AWS Basics"],
@@ -367,7 +364,7 @@ def show_main_app():
                     with col1:
                         with st.expander("💪 Strengths", expanded=True):
                             if analysis_result.get('strengths'):
-                                for strength in analysis_result['strengths'][:3]:
+                                for strength in analysis_result['strengths']:
                                     strength_score = analysis_result['skills_score'].get(strength, 0)
                                     st.markdown(f"""
                                     <div style="border-left: 4px solid #4cc9f0; padding: 0.5rem 1rem; margin-bottom: 1rem; background-color: #f8f9fa;">
@@ -382,7 +379,7 @@ def show_main_app():
                     with col2:
                         with st.expander("🔍 Areas for Improvement", expanded=True):
                             if st.session_state.weaknesses:
-                                for weakness in st.session_state.weaknesses[:3]:
+                                for weakness in st.session_state.weaknesses:
                                     st.markdown(f"""
                                     <div style="border-left: 4px solid #f94144; 
                                                 padding: 1rem; 
@@ -755,22 +752,22 @@ def show_contact_page():
         <p>Have questions or feedback? We'd love to hear from you!</p>
         
         <div style="margin-top: 2rem;">
-            <p><strong>Email:</strong> support@jobpreppro.com</p>
-            <p><strong>Phone:</strong> +1 (555) 123-4567</p>
-            <p><strong>Address:</strong> 123 Career Lane, Tech City, TC 10001</p>
+            <p><strong>Email:</strong> Warishayat666@gmail.com</p>
+            <p><strong>Phone:</strong> +923194758420</p>
+            <p><strong>Address:</strong> Islamabad, pakistan</p>
         </div>
         
         <div style="margin-top: 2rem;">
             <h4>Send us a message:</h4>
             <form>
                 <div style="margin-bottom: 1rem;">
-                    <input type="text" placeholder="Your Name" class="form-input">
+                    <input type="text" placeholder="Waris Hayat" class="form-input">
                 </div>
                 <div style="margin-bottom: 1rem;">
-                    <input type="email" placeholder="Your Email" class="form-input">
+                    <input type="email" placeholder="Warishayat666@gmail.com" class="form-input">
                 </div>
                 <div style="margin-bottom: 1rem;">
-                    <textarea placeholder="Your Message" class="form-textarea"></textarea>
+                    <textarea placeholder="say something that you want" class="form-textarea"></textarea>
                 </div>
                 <button type="submit" class="form-submit">Send Message</button>
             </form>
