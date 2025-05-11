@@ -1,8 +1,6 @@
 import pypdf
 import langchain
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_ollama import ChatOllama 
-from langchain_ollama import OllamaEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 import io
 from langchain_groq import ChatGroq
