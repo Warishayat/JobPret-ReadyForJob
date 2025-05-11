@@ -14,7 +14,7 @@ load_dotenv()
 
 # ---------- Page Config ----------
 st.set_page_config(
-    page_title="JobPret Pro", 
+    page_title="JobPret-Pro", 
     layout="wide",
     page_icon="💼",
     initial_sidebar_state="expanded"
@@ -863,7 +863,7 @@ else:
 # ---------- Footer ----------
 footer = """
 <div class="footer">
-    <p>© 2023 JobPrep Pro | Made with ❤️ by Waris Hayat (AI-Engineer).</p>
+    <p>© 2023 JobPret-Pro | Made with ❤️ by Waris Hayat (AI-Engineer).</p>
     <div style="margin-top: 0.5rem;">
         <a href="?page=privacy" style="color: #4895ef; margin: 0 10px;">Privacy Policy</a>
         <a href="?page=terms" style="color: #4895ef; margin: 0 10px;">Terms of Service</a>
