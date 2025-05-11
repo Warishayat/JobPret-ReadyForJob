@@ -14,7 +14,7 @@ load_dotenv()
 
 # ---------- Page Config ----------
 st.set_page_config(
-    page_title="JobPrep Pro", 
+    page_title="JobPret Pro", 
     layout="wide",
     page_icon="💼",
     initial_sidebar_state="expanded"
@@ -158,7 +158,7 @@ initialize_session()
 # ---------- Page Routing ----------
 def show_main_app():
     # ---------- Header ----------
-    st.title("💼 JobPrep Pro")
+    st.title("💼 JobPret-Pro")
     st.markdown("""
     Your all-in-one career preparation assistant. Analyze resumes, practice interviews, and get personalized feedback.
     """)
