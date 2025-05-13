@@ -1,3 +1,6 @@
+import os
+os.environ["STREAMLIT_SERVER_ENABLE_FILE_WATCHER"] = "false"
+
 import streamlit as st
 from Agent.ResumeAnalysis import Resume_Analysis
 import json
@@ -5,7 +8,6 @@ import matplotlib.pyplot as plt
 from streamlit_chat import message as chat_message
 from PyPDF2 import PdfReader
 import time
-import os
 from dotenv import load_dotenv
 from urllib.parse import parse_qs
 
