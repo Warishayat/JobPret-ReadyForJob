@@ -11,6 +11,7 @@ matplotlib
 pypdf                 
 PyPDF2                
 sentence-transformers 
+langchain_huggingface
 streamlit-chat        
 
 
