@@ -4,6 +4,7 @@ load-dotenv
 faiss-cpu            
 fpdf                  
 fpdf2                 
+langchain-google-genai
 langchain-community   
 langchain-groq        
 load-dotenv          

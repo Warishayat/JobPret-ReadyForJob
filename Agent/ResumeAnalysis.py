@@ -2,12 +2,12 @@ import pypdf
 import langchain
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import io
 from langchain_groq import ChatGroq
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA  
 from concurrent.futures import ThreadPoolExecutor
-from langchain_huggingface import HuggingFaceEmbeddings
 import re
 import base64
 from typing import Dict, Any
@@ -24,6 +24,7 @@ warnings.filterwarnings("ignore")
 load_dotenv()
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 class Resume_Analysis:
     
@@ -43,11 +44,10 @@ class Resume_Analysis:
             streaming=True,
             verbose=True,
             api_key=GROQ_API_KEY)
-        self.embedding = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={'device': 'cpu'},
-            encode_kwargs={'normalize_embeddings': False}
-)
+        self.embeddings = GoogleGenerativeAIEmbeddings(
+            model="models/embedding-001",
+            google_api_key=GEMINI_API_KEY
+        )
     def safe_api_call(self, prompt: str, max_retries: int = 3) -> Dict[str, Any]:
         """Handle API calls with retries and proper error checking"""
         for attempt in range(max_retries):
