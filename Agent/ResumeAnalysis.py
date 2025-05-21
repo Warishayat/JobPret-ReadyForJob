@@ -44,7 +44,7 @@ class Resume_Analysis:
             streaming=True,
             verbose=True,
             api_key=GROQ_API_KEY)
-        self.embeddings = GoogleGenerativeAIEmbeddings(
+        self.embedding = GoogleGenerativeAIEmbeddings(
             model="models/embedding-001",
             google_api_key=GEMINI_API_KEY
         )

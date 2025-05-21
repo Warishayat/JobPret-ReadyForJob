@@ -1,6 +1,5 @@
 import os
 os.environ["STREAMLIT_SERVER_ENABLE_FILE_WATCHER"] = "false"
-
 import streamlit as st
 from Agent.ResumeAnalysis import Resume_Analysis
 import json
