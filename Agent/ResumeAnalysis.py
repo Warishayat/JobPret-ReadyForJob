@@ -1,16 +1,14 @@
 import pypdf
-import langchain
+import PyPDF2
+import pdfplumber  # Additional PDF library as fallback
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 import io
 from langchain_groq import ChatGroq
 from langchain_community.vectorstores import FAISS
-from langchain.chains import RetrievalQA  
 from concurrent.futures import ThreadPoolExecutor
 import re
-import base64
-from typing import Dict, Any
 import json
 import warnings
 import os
@@ -18,13 +16,10 @@ import numpy as np
 import time
 from dotenv import load_dotenv
 
-
 warnings.filterwarnings("ignore")
-
 load_dotenv()
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 class Resume_Analysis:
     
@@ -39,67 +34,134 @@ class Resume_Analysis:
         self.resume_strengths = None
         self.improvement_suggestion = None
         self.Model = ChatGroq( 
-            model="gemma2-9b-it",
+            model="openai/gpt-oss-20b",
             temperature=0.6, 
-            streaming=True,
-            verbose=True,
             api_key=GROQ_API_KEY)
-        self.embedding = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
-            google_api_key=GEMINI_API_KEY
+        
+        # Use FREE local embeddings instead of Google Gemini
+        self.embedding = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            model_kwargs={'device': 'cpu'}
         )
-    def safe_api_call(self, prompt: str, max_retries: int = 3) -> Dict[str, Any]:
-        """Handle API calls with retries and proper error checking"""
-        for attempt in range(max_retries):
-            try:
-                response = self.Model.invoke(prompt)
-                
-                # Check if response has valid content
-                if not hasattr(response, 'content'):
-                    raise ValueError("Invalid API response - missing content")
-                
-                # Try to parse JSON if content looks like JSON
-                content = response.content.strip()
-                if content.startswith('{') or content.startswith('['):
-                    try:
-                        return json.loads(content)
-                    except json.JSONDecodeError:
-                        pass
-                
-                return {"response": content}
-                
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    raise
-                time.sleep(1)  # Wait before retrying
-        return {}
     
-    def pdfFile(self, pdf_file):
-        """Extract text from PDF file"""
+    def pdfFile_pypdf(self, pdf_file):
+        """Extract text using pypdf (primary method)"""
+        try:
+            if hasattr(pdf_file, 'getvalue'):
+                pdf_data = pdf_file.getvalue()
+                pdf_reader = pypdf.PdfReader(io.BytesIO(pdf_data))
+            else:
+                pdf_reader = pypdf.PdfReader(pdf_file)
+            
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text() + "\n"
+            return text.strip()
+        except Exception as e:
+            print(f"pypdf failed: {e}")
+            return None
+
+    def pdfFile_pypdf2(self, pdf_file):
+        """Extract text using PyPDF2 (fallback method)"""
+        try:
+            if hasattr(pdf_file, 'getvalue'):
+                pdf_data = pdf_file.getvalue()
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_data))
+            else:
+                pdf_reader = PyPDF2.PdfReader(pdf_file)
+            
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text() + "\n"
+            return text.strip()
+        except Exception as e:
+            print(f"PyPDF2 failed: {e}")
+            return None
+
+    def pdfFile_pdfplumber(self, pdf_file):
+        """Extract text using pdfplumber (robust fallback)"""
+        try:
+            if hasattr(pdf_file, 'getvalue'):
+                pdf_data = pdf_file.getvalue()
+                pdf_file_like = io.BytesIO(pdf_data)
+            else:
+                pdf_file_like = pdf_file
+            
+            text = ""
+            with pdfplumber.open(pdf_file_like) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + "\n"
+            return text.strip()
+        except Exception as e:
+            print(f"pdfplumber failed: {e}")
+            return None
+
+    def pdfFile_langchain(self, pdf_file):
+        """Extract text using LangChain's PyPDFLoader"""
         try:
             if hasattr(pdf_file, 'getvalue'):
                 pdf_data = pdf_file.getvalue()
                 pdf_file_like = io.BytesIO(pdf_data)
                 loader = PyPDFLoader(pdf_file_like)
             else:
-                loader = PyPDFLoader(file_path=pdf_file)  # Fixed variable name
-            text = "" 
+                loader = PyPDFLoader(file_path=pdf_file)
+            
+            text = ""
             pages = loader.load_and_split()
             for page in pages:
                 text += page.page_content + "\n"
-            return text
+            return text.strip()
         except Exception as e:
-            print(f"Error processing PDF: {e}")
+            print(f"LangChain PDF loader failed: {e}")
             return None
+
+    def pdfFile(self, pdf_file):
+        """Extract text from PDF file with multiple fallback methods"""
+        methods = [
+            self.pdfFile_pdfplumber,  # Most robust for corrupted PDFs
+            self.pdfFile_pypdf,       # Primary method
+            self.pdfFile_pypdf2,      # Alternative method
+            self.pdfFile_langchain    # LangChain's method
+        ]
+        
+        for i, method in enumerate(methods):
+            try:
+                print(f"Trying PDF extraction method {i+1}...")
+                text = method(pdf_file)
+                if text and len(text.strip()) > 50:  # Ensure we have meaningful text
+                    print(f"Success with method {i+1}")
+                    return text
+            except Exception as e:
+                print(f"Method {i+1} failed: {e}")
+                continue
+        
+        print("All PDF extraction methods failed")
+        return None
 
     def txtFile(self, text_file):
         """Extract text from text file"""
         try:
             if hasattr(text_file, "getvalue"):
-                return text_file.getvalue().decode("utf-8") 
+                content = text_file.getvalue()
+                if isinstance(content, bytes):
+                    return content.decode("utf-8")
+                return content
             else:
-                with open(text_file, "r", encoding="utf-8") as f:  # Added encoding
+                with open(text_file, "r", encoding="utf-8") as f:
                     return f.read()
+        except UnicodeDecodeError:
+            # Try different encodings
+            try:
+                if hasattr(text_file, "getvalue"):
+                    return text_file.getvalue().decode("latin-1")
+                else:
+                    with open(text_file, "r", encoding="latin-1") as f:
+                        return f.read()
+            except Exception as e:
+                print(f"Error reading text file with latin-1: {e}")
+                return None
         except Exception as e:
             print(f"Error reading text file: {e}")
             return None
@@ -123,21 +185,38 @@ class Resume_Analysis:
             print(f"File selection error: {e}")
             return None
             
+    def validate_text_content(self, text):
+        """Validate that extracted text is usable"""
+        if not text:
+            return False
+        if len(text.strip()) < 50:  # Too short to be a resume
+            return False
+        if text.strip().count('\n') < 3:  # Not enough structure
+            return False
+        return True
+            
     def rag_vector_store(self, text, chunk_size=700, chunk_overlap=200):
-        """Create vector store from text"""
+        """Create vector store from text using FREE embeddings"""
         if not text:
             raise ValueError("No text provided for vector store creation")
+            
+        if not self.validate_text_content(text):
+            raise ValueError("Extracted text is too short or invalid for analysis")
             
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap
         )
         chunks = text_splitter.split_text(text)
-        vector_store = FAISS.from_texts(chunks, embedding=self.embedding)  # Fixed chunks usage
+        
+        if not chunks:
+            raise ValueError("No chunks created from the text")
+            
+        vector_store = FAISS.from_texts(chunks, embedding=self.embedding)
         return vector_store
     
-    def qa_chain(self, text=None):
-        """Create QA chain for question answering"""
+    def create_simple_qa_chain(self, text=None):
+        """Create a simple QA chain"""
         if text:
             vectorstore = self.rag_vector_store(text)
         elif self.rag_vectorstore:
@@ -145,32 +224,57 @@ class Resume_Analysis:
         else:
             raise ValueError("No text provided for QA chain creation")
             
-        retriever = vectorstore.as_retriever(search_kwargs={"k":1})
-        chain = RetrievalQA.from_chain_type(
-            llm=self.Model,
-            retriever=retriever,
-            chain_type="stuff"
-        )
-        return chain
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+        return retriever
     
-    def analyze_Skills(self, qa_chain, skills):
+    def analyze_Skills(self, retriever, skill):
         """Improved skill analysis with better error handling"""
-        query = f"On a scale of 0-10, how clearly does the person demonstrate proficiency in {skills}? Provide the numeric rating before the reasoning."
+        query = f"How clearly does the resume demonstrate proficiency in {skill}? Rate from 0-10 and explain."
         
         try:
-            response = qa_chain.run(query)
-            if not response:
-                return skills, 0, "No response from model"
+            # Get relevant documents
+            docs = retriever.get_relevant_documents(query)
+            if not docs:
+                return skill, 0, "No relevant content found in resume"
                 
-            match = re.search(r"(\d{1,2})", response)
-            score = int(match.group(1)) if match else 0
+            context = "\n".join([doc.page_content for doc in docs][:3])
             
-            reasoning = response.split(".", 1)[1].strip() if "." in response and len(response.split(".")) > 1 else ""
-            return skills, min(score, 10), reasoning
+            # Create prompt with context
+            prompt = f"""
+            Based on this resume content:
+            {context}
+            
+            Question: {query}
+            
+            Provide your answer in this exact format:
+            Score: [number between 0-10]
+            Reasoning: [your explanation here]
+            """
+            
+            response = self.Model.invoke(prompt)
+            if not response:
+                return skill, 0, "No response from model"
+                
+            answer = response.content
+            
+            # Extract score using regex
+            score_match = re.search(r"Score:\s*(\d{1,2})", answer, re.IGNORECASE)
+            if not score_match:
+                # Fallback: look for any number
+                score_match = re.search(r"\b(\d{1,2})\b", answer.split('\n')[0])
+            
+            score = int(score_match.group(1)) if score_match else 0
+            score = min(max(score, 0), 10)  # Ensure score is between 0-10
+            
+            # Extract reasoning
+            reasoning_match = re.search(r"Reasoning:\s*(.+)", answer, re.IGNORECASE | re.DOTALL)
+            reasoning = reasoning_match.group(1).strip() if reasoning_match else answer
+                
+            return skill, score, reasoning
             
         except Exception as e:
-            print(f"Error analyzing skills: {e}")
-            return skills, 0, f"Error in analysis: {str(e)}"
+            print(f"Error analyzing {skill}: {e}")
+            return skill, 0, f"Error in analysis: {str(e)}"
     
     def analyze_resume_weakness(self):
         """Analyze resume weaknesses"""
@@ -189,14 +293,14 @@ class Resume_Analysis:
             3: What specific action items would make this skill stand out?
 
             Resume content:
-            {self.resume_text[:3000]}...
+            {self.resume_text[:3000]}
            
             Provide your response in JSON format:
             {{
                 "weakness": "A concise description of weakness (1-2 sentences)",
                 "improvement_suggestion": [
                     "specific suggestion 1",
-                    "specific suggestion 2",
+                    "specific suggestion 2", 
                     "specific suggestion 3"
                 ],
                 "example_addition": "A specific bullet point that could be added to showcase the skill"
@@ -204,26 +308,34 @@ class Resume_Analysis:
             Return only valid JSON with no additional text.
             """
 
-            response = self.Model.invoke(prompt)
-            weakness_content = response.content.strip()
-
             try:
-                weakness_data = json.loads(weakness_content)
+                response = self.Model.invoke(prompt)
+                weakness_content = response.content.strip()
 
-                weakness_detail = {
-                    "skill": skill,
-                    "score": self.analyze_result.get("skills_score", {}).get(skill, 0),
-                    "detail": weakness_data.get("weakness", "No specific detail provided."),
-                    "suggestion": weakness_data.get("improvement_suggestion", []),
-                    "example": weakness_data.get("example_addition", "")
-                }
-                weaknesses.append(weakness_detail)
+                try:
+                    weakness_data = json.loads(weakness_content)
 
-            except json.JSONDecodeError:
+                    weakness_detail = {
+                        "skill": skill,
+                        "score": self.analyze_result.get("skills_score", {}).get(skill, 0),
+                        "detail": weakness_data.get("weakness", "No specific detail provided."),
+                        "suggestion": weakness_data.get("improvement_suggestion", []),
+                        "example": weakness_data.get("example_addition", "")
+                    }
+                    weaknesses.append(weakness_detail)
+
+                except json.JSONDecodeError:
+                    weaknesses.append({
+                        "skill": skill,
+                        "score": self.analyze_result.get("skills_score", {}).get(skill, 0),
+                        "detail": weakness_content[:200]
+                    })
+            except Exception as e:
+                print(f"Error analyzing weakness for {skill}: {e}")
                 weaknesses.append({
                     "skill": skill,
                     "score": self.analyze_result.get("skills_score", {}).get(skill, 0),
-                    "detail": weakness_content[:200]
+                    "detail": f"Error analyzing this skill: {str(e)}"
                 })
         
         self.resume_weakness = weaknesses
@@ -233,40 +345,35 @@ class Resume_Analysis:
         """Extract skills from job description"""
         try:
             prompt = f"""
-            Extract a comprehensive list of skills, technologies and competencies required from this
-            job description.
-            Format the output as a Python list of strings, only include the list nothing else.
+            Extract a comprehensive list of technical skills, technologies and competencies from this job description.
+            Return ONLY a Python list format like: ["skill1", "skill2", "skill3"]
             
             Job description:
-            {jd_text}
+            {jd_text[:2000]}
             """
             response = self.Model.invoke(prompt)
             skills_text = response.content
 
-            match = re.search(r'\[(.*?)\]', skills_text, re.DOTALL)
-
+            # Extract list from response using regex
+            match = re.search(r'\[.*\]', skills_text, re.DOTALL)
             if match:
-                skills_text = match.group(0)
-
-            try:
-                skills_list = eval(skills_text)
-                if isinstance(skills_list, list):
-                    return skills_list
-            except:
-                pass
-                
+                try:
+                    skills_list = eval(match.group(0))
+                    if isinstance(skills_list, list):
+                        # Clean and return skills
+                        return [str(skill).strip() for skill in skills_list if skill and str(skill).strip()]
+                except:
+                    pass
+            
+            # Fallback: extract skills line by line
             skills = []
             for line in skills_text.split("\n"):
-                line = line.strip()
-                if line.startswith('-') or line.startswith('*'):
-                    skill = line[2:].strip()
-                    if skill:
-                        skills.append(skill)
-                elif line.startswith('"') and line.endswith('"'):
-                    skill = line.strip('"')
-                    if skill:
-                        skills.append(skill)
-            return skills
+                line = line.strip().strip('",')
+                if line and len(line) > 2 and not line.startswith('[') and not line.startswith(']'):
+                    skills.append(line)
+                    
+            return skills[:20]  # Limit to 20 skills max
+            
         except Exception as e:
             print(f"Error extracting skills from job description: {e}")
             return []
@@ -279,19 +386,13 @@ class Resume_Analysis:
             raise ValueError("No skills provided for analysis")
 
         try:
-            # Create vector store and QA chain
+            # Create vector store and retriever
             vectorstore = self.rag_vector_store(text=resume_text)
-            retriever = vectorstore.as_retriever(search_kwargs={"k": 3})  # Increase retrieved chunks
-            qa_chain = RetrievalQA.from_chain_type(
-                llm=self.Model,
-                retriever=retriever,
-                chain_type="stuff",
-                return_source_documents=False
-            )
+            retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
             # Analyze skills in parallel
-            with ThreadPoolExecutor(max_workers=min(5, len(skills))) as executor:
-                results = list(executor.map(lambda skill: self.analyze_Skills(qa_chain, skill), skills))
+            with ThreadPoolExecutor(max_workers=min(3, len(skills))) as executor:
+                results = list(executor.map(lambda skill: self.analyze_Skills(retriever, skill), skills))
 
             # Process results
             skills_score = {}
@@ -301,9 +402,8 @@ class Resume_Analysis:
 
             for skill, score, reasoning in results:
                 if skill and score is not None:
-                    score = min(max(score, 0), 10)  # Clamp score between 0-10
                     skills_score[skill] = score
-                    skills_reasoning[skill] = reasoning or "No reasoning provided"
+                    skills_reasoning[skill] = reasoning
                     total_score += score
                     valid_skills_count += 1
 
@@ -317,18 +417,6 @@ class Resume_Analysis:
             weak_skills = [skill for skill, score in skills_score.items() if score <= 5]
             medium_skills = [skill for skill, score in skills_score.items() if 5 < score < 7]
 
-            # Improved weakness detection
-            improvement_areas = []
-            if overall_score < 70:  # More aggressive weakness detection for lower scores
-                improvement_areas.extend(weak_skills)
-                if overall_score < 50:  # Include medium skills if score is very low
-                    improvement_areas.extend(medium_skills)
-
-            # Ensure we always show some weaknesses for scores below cutoff
-            if not improvement_areas and overall_score < self.cutoff_score:
-                improvement_areas = [skill for skill, score in skills_score.items() 
-                                if score < max(7, np.percentile(list(skills_score.values()), 70))]
-
             # Prepare final result
             self.resume_strengths = strengths
             self.analyze_result = {
@@ -339,46 +427,53 @@ class Resume_Analysis:
                 "reasoning": f"Evaluation based on {valid_skills_count} analyzed skills",
                 "missing_skills": weak_skills,
                 "strengths": strengths,
-                "improvement_areas": list(set(improvement_areas)),  # Remove duplicates
-                "medium_skills": medium_skills  # New field for borderline skills
+                "improvement_areas": weak_skills,
+                "medium_skills": medium_skills
             }
 
             return self.analyze_result
 
         except Exception as e:
             error_msg = f"Analysis failed: {str(e)}"
-            if hasattr(self, 'last_error'):
-                self.last_error = error_msg
             raise ValueError(error_msg)
 
     def chat_with_resume(self, query):
-        """Chat with resume content"""
+        """Chat with resume content using simple retrieval"""
         try:
             if not self.resume_text:
                 raise ValueError("No resume text loaded. Upload your resume first.")
             if not self.rag_vectorstore:
                 self.rag_vectorstore = self.rag_vector_store(self.resume_text)
                 
-            retriever = self.rag_vectorstore.as_retriever()
-            chain = RetrievalQA.from_chain_type(
-                llm=self.Model,
-                retriever=retriever,
-                chain_type="stuff",
-                return_source_documents=False
-            )
-            response = chain.invoke({"query": query})
-            return response["result"]
+            # Get relevant documents
+            retriever = self.rag_vectorstore.as_retriever(search_kwargs={"k": 3})
+            docs = retriever.get_relevant_documents(query)
+            context = "\n".join([doc.page_content for doc in docs])
+            
+            # Create prompt with context
+            prompt = f"""
+            Based on the following resume content:
+            {context}
+            
+            Question: {query}
+            
+            Provide a helpful and accurate answer:
+            """
+            
+            response = self.Model.invoke(prompt)
+            return response.content
+            
         except Exception as e:
             print(f"Error in chat_with_resume: {e}")
             return f"Error: {str(e)}"
 
     def generate_question_answer(self, interview_type: str, difficulty: str, num_questions: int):
         prompt = f"""
-        Generate exactly {num_questions} interview questions for {interview_type} ({difficulty} level).
+        Generate exactly {num_questions} interview questions for {interview_type} position at {difficulty} level.
         Return ONLY a JSON array with each item containing:
         {{
-            "question": "text",
-            "answer": "text",
+            "question": "the interview question",
+            "answer": "a good sample answer", 
             "category": "technical/behavioral/general"
         }}
         No additional commentary or formatting.
@@ -392,40 +487,30 @@ class Resume_Analysis:
             content = content.replace("```json", "").replace("```", "").strip()
             questions = json.loads(content)
             
-            return questions[:num_questions]  # Ensure exact count
+            return questions[:num_questions]
             
         except Exception as e:
-            self.last_error = str(e)
+            print(f"Error generating questions: {e}")
             # Return simple fallback questions
             return [{
-                "question": f"{interview_type} interview question ({difficulty})",
-                "answer": "Sample answer based on resume",
+                "question": f"{interview_type} question {i+1} ({difficulty})",
+                "answer": "This would be a sample answer based on the resume content.",
                 "category": "general"
-            } for _ in range(num_questions)]
+            } for i in range(num_questions)]
         
-    def generate_tailored_documents(self, role: str) -> tuple[str, str]:
+    def generate_tailored_documents(self, role: str):
         try:
             # Build a more structured prompt
             prompt = f"""
-            Generate tailored resume and cover letter for: {role}
+            Generate tailored resume content and cover letter for the role: {role}
             
-            Requirements:
-            1. RESUME FORMAT:
-            - Professional summary
-            - Technical skills section
-            - Work experience with metrics
-            - Education
+            Focus on these strengths: {', '.join(self.resume_strengths[:3]) if self.resume_strengths else 'relevant technical skills'}
             
-            2. COVER LETTER FORMAT:
-            - 3-4 paragraphs
-            - Address hiring manager
-            - Highlight relevant skills
-            - Show enthusiasm
-            
-            3. FOCUS AREAS:
-            - {', '.join(self.resume_strengths[:3]) if hasattr(self, 'resume_strengths') else 'Relevant skills'}
-            
-            Return as valid JSON with 'resume' and 'cover_letter' keys.
+            Return as valid JSON with exactly these two keys:
+            {{
+                "resume": "professional resume content here",
+                "cover_letter": "professional cover letter here" 
+            }}
             """
             
             response = self.Model.invoke(prompt)
@@ -437,29 +522,17 @@ class Resume_Analysis:
                 resume = docs.get('resume', '').strip()
                 cover = docs.get('cover_letter', '').strip()
             except json.JSONDecodeError:
-                # Fallback to text parsing
-                if "RESUME:" in content and "COVER LETTER:" in content:
-                    parts = content.split("COVER LETTER:")
-                    resume = parts[0].replace("RESUME:", "").strip()
-                    cover = parts[1].strip()
-                else:
-                    # Final fallback - split by paragraphs
-                    parts = content.split("\n\n")
-                    resume = "\n\n".join(parts[:len(parts)//2])
-                    cover = "\n\n".join(parts[len(parts)//2:])
+                # Fallback
+                resume = f"Professional Resume for {role}\n\nHighlighting: {', '.join(self.resume_strengths[:3]) if self.resume_strengths else 'relevant skills'}"
+                cover = f"Dear Hiring Manager,\n\nI am excited to apply for the {role} position...\n\nSincerely,\n[Your Name]"
             
-            # Ensure minimum content length
-            if len(resume) < 50 or len(cover) < 50:
-                raise ValueError("Generated content too short")
-                
             return resume, cover
             
         except Exception as e:
-            self.last_error = str(e)
-            # Return template fallback
+            print(f"Error generating documents: {e}")
             return (
-                "Professional Resume Content\n\nSkills: [...]\nExperience: [...]",
-                "Dear Hiring Manager,\n\nI'm excited to apply...\n\nSincerely,\n[Your Name]"
+                f"Professional Resume for {role}",
+                f"Cover Letter for {role} Position"
             )
         
     def reset(self):

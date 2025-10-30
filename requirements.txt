@@ -1,20 +1,52 @@
-langchain-community 
-langchain-groq      
-load-dotenv
-faiss-cpu            
-fpdf                  
-fpdf2                 
-langchain-google-genai
-langchain-community   
-langchain-groq        
-langchain
-load-dotenv          
-matplotlib           
-pypdf                 
-PyPDF2                
-sentence-transformers 
-langchain_huggingface
-streamlit-chat        
+# --- Core Web Frameworks ---
 streamlit
+fastapi
+uvicorn
+python-dotenv
+requests
+pydantic
+tqdm
+tenacity
+aiohttp
+httpx
+SQLAlchemy
+PyYAML
+dataclasses-json
+loguru
 
+# --- LangChain + LangGraph Ecosystem ---
+langchain
+langchain-core
+langchain-community
+langchain-text-splitters
+langchain-groq
+langchain-google-genai
+langgraph
+langsmith
 
+# --- AI / NLP / Machine Learning ---
+transformers
+sentence-transformers
+torch
+numpy
+scikit-learn
+
+# --- PDF & Document Processing ---
+pypdf
+pdfminer.six
+PyMuPDF
+fitz
+docx2txt
+python-docx
+
+# --- Vector Databases / Embeddings ---
+faiss-cpu
+chromadb
+google-generativeai
+
+# --- Utility Tools ---
+regex
+beautifulsoup4
+lxml
+nltk
+spacy
