@@ -4,9 +4,14 @@ fastapi
 uvicorn
 python-dotenv
 requests
+matplotlib
+streamlit_chat
+langchain_huggingface
 pydantic
 tqdm
 tenacity
+PyPDF2
+pdfplumber
 aiohttp
 httpx
 SQLAlchemy
